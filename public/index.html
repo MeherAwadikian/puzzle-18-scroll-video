@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Scroll-Scrubbed Image Sequence — Puzzle #18</title>
+<style>
+  :root {
+    --bg: #0b0f1a;
+    --fg: #e8ecf5;
+    --accent: #6ea8ff;
+    --muted: #8893a8;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+
+  .hero {
+    min-height: 60vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 2rem;
+  }
+  .hero h1 { font-size: clamp(1.6rem, 4vw, 2.6rem); margin: 0 0 0.5rem; }
+  .hero p { color: var(--muted); max-width: 540px; margin: 0.25rem 0; }
+  .scroll-hint {
+    margin-top: 2rem;
+    font-size: 0.9rem;
+    color: var(--accent);
+    animation: bob 1.6s ease-in-out infinite;
+  }
+  @keyframes bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(8px); } }
+
+  /* The scroll track: tall section whose height determines how much scroll
+     distance maps across the full frame sequence. The canvas inside is
+     sticky/pinned so it stays on screen the whole time this section scrolls. */
+  .scroll-track {
+    position: relative;
+    height: 500vh; /* scroll distance mapped to frames 0..N-1 */
+  }
+  .pin {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .canvas-wrap {
+    position: relative;
+    width: min(90vmin, 720px);
+    height: min(90vmin, 720px);
+  }
+  canvas#seq {
+    width: 100%;
+    height: 100%;
+    display: block;
+    border-radius: 12px;
+    background: #10141f;
+  }
+  .hud {
+    position: absolute;
+    left: 50%;
+    bottom: -3rem;
+    transform: translateX(-50%);
+    width: min(90vmin, 720px);
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .progress-bar {
+    width: 100%;
+    height: 4px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 0.5rem;
+  }
+  .progress-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--accent);
+    transition: width 0.05s linear;
+  }
+  .loading-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    background: rgba(11,15,26,0.7);
+    font-size: 0.9rem;
+    color: var(--muted);
+    transition: opacity 0.3s ease;
+  }
+  .spinner {
+    width: 28px; height: 28px;
+    border: 3px solid rgba(255,255,255,0.15);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .after {
+    min-height: 60vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 3rem 2rem;
+    color: var(--muted);
+  }
+  .after h2 { color: var(--fg); }
+  code {
+    background: rgba(255,255,255,0.08);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+  }
+  footer {
+    text-align: center;
+    padding: 2rem;
+    color: #566;
+    font-size: 0.8rem;
+  }
+</style>
+</head>
+<body>
+
+  <section class="hero">
+    <h1>Scroll to Scrub the Animation</h1>
+    <p>120 individually rendered PNG frames of a spinning icosahedron, drawn on a
+       &lt;canvas&gt; element. There is no video and no CSS keyframe animation —
+       each scroll-pixel position maps deterministically to one specific frame index.</p>
+    <div class="scroll-hint">↓ scroll down ↓</div>
+  </section>
+
+  <section class="scroll-track" id="track">
+    <div class="pin">
+      <div class="canvas-wrap">
+        <canvas id="seq" width="900" height="900"></canvas>
+        <div class="loading-overlay" id="loadingOverlay">
+          <div class="spinner"></div>
+          <div id="loadingText">loading frames… 0 / 120</div>
+        </div>
+      </div>
+      <div class="hud">
+        <span id="frameLabel">frame 1 / 120</span>
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="after">
+    <h2>That's the whole trick</h2>
+    <p>The scroll track above is <code>500vh</code> tall. While it scrolls past,
+       the canvas is <code>position: sticky</code> so it stays pinned on screen.
+       A scroll listener computes how far through that tall section you are
+       (0 to 1), multiplies by 119, and draws the matching frame from the
+       preloaded image array onto the canvas. Frames load progressively in the
+       background — frame 0 is usable almost immediately, the rest stream in
+       and the clamp simply holds the nearest loaded frame until it arrives.</p>
+  </section>
+
+  <footer>Puzzle #18 — scroll-controlled image-sequence animation. Built with vanilla JS + Canvas 2D.</footer>
+
+<script>
+(function () {
+  const FRAME_COUNT = 120;
+  const framePath = (i) => `/frames/frame_${String(i).padStart(4, '0')}.png`;
+
+  const canvas = document.getElementById('seq');
+  const ctx = canvas.getContext('2d');
+  const track = document.getElementById('track');
+  const loadingOverlay = document.getElementById('loadingOverlay');
+  const loadingText = document.getElementById('loadingText');
+  const frameLabel = document.getElementById('frameLabel');
+  const progressFill = document.getElementById('progressFill');
+
+  const images = new Array(FRAME_COUNT).fill(null);
+  let loadedCount = 0;
+  let currentFrame = -1; // force first draw
+
+  function drawFrame(index) {
+    const clamped = Math.max(0, Math.min(FRAME_COUNT - 1, index));
+    // If the exact frame hasn't loaded yet, hold the nearest loaded frame
+    // below it (progressive reveal instead of blocking on full preload).
+    let useIndex = clamped;
+    if (!images[useIndex]) {
+      let fallback = useIndex;
+      while (fallback > 0 && !images[fallback]) fallback--;
+      if (images[fallback]) useIndex = fallback;
+      else return; // nothing loaded yet at all
+    }
+    if (useIndex === currentFrame) return;
+    currentFrame = useIndex;
+    const img = images[useIndex];
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    frameLabel.textContent = `frame ${clamped + 1} / ${FRAME_COUNT}`;
+  }
+
+  function scrollProgress() {
+    const rect = track.getBoundingClientRect();
+    const trackHeight = track.offsetHeight - window.innerHeight;
+    if (trackHeight <= 0) return 0;
+    const scrolled = -rect.top;
+    return Math.max(0, Math.min(1, scrolled / trackHeight));
+  }
+
+  function onScroll() {
+    const p = scrollProgress();
+    const idx = Math.round(p * (FRAME_COUNT - 1));
+    drawFrame(idx);
+    progressFill.style.width = `${p * 100}%`;
+  }
+
+  // Preload: frame 0 first (synchronously prioritized), then the rest in
+  // order. Each image draws itself in the background; onScroll picks up
+  // whichever frames exist whenever it next runs.
+  function preload() {
+    let settled = 0;
+    function markLoaded(i) {
+      if (!images[i]) return;
+      loadedCount++;
+      loadingText.textContent = `loading frames… ${loadedCount} / ${FRAME_COUNT}`;
+      if (loadedCount === FRAME_COUNT) {
+        loadingOverlay.style.opacity = '0';
+        setTimeout(() => (loadingOverlay.style.display = 'none'), 300);
+      }
+      if (i === 0) onScroll(); // show something as soon as frame 0 lands
+    }
+    for (let i = 0; i < FRAME_COUNT; i++) {
+      const img = new Image();
+      img.onload = () => {
+        images[i] = img;
+        markLoaded(i);
+      };
+      img.onerror = () => {
+        settled++;
+      };
+      img.src = framePath(i);
+    }
+  }
+
+  window.addEventListener('scroll', onScroll, { passive: true });
+  window.addEventListener('resize', onScroll);
+  preload();
+  onScroll();
+})();
+</script>
+</body>
+</html>
