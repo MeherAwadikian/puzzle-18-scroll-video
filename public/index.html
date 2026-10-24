@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Scroll-Scrubbed Image Sequence — Puzzle #18</title>
+<title>Scroll-Scrubbed Image Sequence: Puzzle #18</title>
 <style>
   :root {
     --bg: #0b0f1a;
@@ -142,7 +142,7 @@
   <section class="hero">
     <h1>Scroll to Scrub the Animation</h1>
     <p>120 individually rendered PNG frames of a spinning icosahedron, drawn on a
-       &lt;canvas&gt; element. There is no video and no CSS keyframe animation —
+       &lt;canvas&gt; element. There is no video and no CSS keyframe animation:
        each scroll-pixel position maps deterministically to one specific frame index.</p>
     <div class="scroll-hint">↓ scroll down ↓</div>
   </section>
@@ -170,11 +170,11 @@
        A scroll listener computes how far through that tall section you are
        (0 to 1), multiplies by 119, and draws the matching frame from the
        preloaded image array onto the canvas. Frames load progressively in the
-       background — frame 0 is usable almost immediately, the rest stream in
+       background: frame 0 is usable almost immediately, the rest stream in,
        and the clamp simply holds the nearest loaded frame until it arrives.</p>
   </section>
 
-  <footer>Puzzle #18 — scroll-controlled image-sequence animation. Built with vanilla JS + Canvas 2D.</footer>
+  <footer>Puzzle #18: scroll-controlled image-sequence animation. Built with vanilla JS and Canvas 2D.</footer>
 
 <script>
 (function () {
